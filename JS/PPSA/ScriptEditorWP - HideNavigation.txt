@@ -1,0 +1,11 @@
+<style type="text/css" unselectable=”on”>
+#s4-leftpanel-content {display:none !important;}
+.s4-ca {margin-left:0px !important; margin-right:0px !important;}
+.ms-core-navigation { display: none; }
+/* hide left menu bar */
+#sideNavBox
+{display: none;}
+/* adjust position of content */
+#contentBox
+{margin-left:80px!important;}
+</style>

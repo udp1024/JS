@@ -1,0 +1,14 @@
+<asp:Content ID="PPSA" ContentPlaceHolderID="PlaceHolderPPSA" runat="server">
+    <script type="text/javascript" src="/ppsa/SiteAssets/js/submit_team_snippet.js">
+	</script>
+
+<br/><br/>
+<table width="100%">
+  <tr>
+    <td align="left">Once you are done adding information and have attached optional supporting document, please click on the [Submit] button.<br/><strong>NOTE: Submitting will record the date/time of the submission and notify administration that your nomination is complete.</strong><br/><br/></td>
+  </tr>
+  <tr>
+    <td align="left"><input id="btnSubmit" type="button" value="Submit" onclick="getUser()" /><br/><br/></td>
+  </tr>
+</table>
+</asp:Content>

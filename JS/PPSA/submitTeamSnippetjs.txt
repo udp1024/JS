@@ -1,0 +1,255 @@
+/*jshint esversion: 6 */
+var currentUser;
+var foundListItem;
+var incompleteSubmission = false;
+var listItems = [];
+var itemId;
+var emailcc = [];
+var emailbcc = 'goa\\psc.recognition.m';
+var snominee;
+var aURL;
+var stringName;
+var selectedStr;
+var queryString = [];
+var clientContext;
+var targetListID;
+var redirectFlag = true; // controls which page will be shown after submission. True for Thanks, False for Oops
+
+function getUser() {
+    var selected=SP.ListOperation.Selection.getSelectedItems(); //SP.ListOperations take the default ctx when none is specified. Returns an Object Array
+    targetListID = SP.ListOperation.Selection.getSelectedList(); //selected list Id
+	if (selected.length == 0){
+        alert("Please select an item to submit. To select an item, click on the check mark (✓) to the left of the item.");
+        return;
+    }
+    selectedStr = selected.map(function(item){ // loop all Objects
+	    return item.id;                            // return the ID
+		}).join(',');                                  // concatenate to one string 
+	console.log('selected IDs:',selectedStr);
+	
+    clientContext = SP.ClientContext.get_current(); //new SP.ClientContext();
+    currentUser = clientContext.get_web().get_currentUser();
+
+    clientContext.load(currentUser);
+    clientContext.executeQueryAsync(Function.createDelegate(this, this.onQuerySucceeded), Function.createDelegate(this, this.onQueryFailed));
+    }
+
+function onQuerySucceeded() {
+	stringName = currentUser.get_title();
+
+    checkListItem(stringName);
+    }
+
+  // check if current user is in list items
+function checkListItem(stringName) {
+	//var clientContext = new SP.ClientContext();
+    var targetList = clientContext.get_web().get_lists().getById(targetListID);
+    //var targetList = SP.ListOperation.Selection.getSelectedList(); //selected list Id
+
+	var query = new SP.CamlQuery();
+    queryString = queryString + "<View><Query>"+"<Where>"+"<In>"+"<FieldRef Name='ID' />"+"<Values>";
+
+    var selectedArray = selectedStr.split(',').forEach(function(item){
+        queryString = queryString + "<Value Type='Number'>"+ item.toString() + "</Value>";
+    });
+
+    queryString = queryString + "</Values>" + "</In>" + "</Where>" + "</View></Query>";
+    query.set_viewXml(queryString);
+    listItems = targetList.getItems(query);
+	clientContext.load(listItems);
+	clientContext.executeQueryAsync(Function.createDelegate(this, this.onQuerySucceeded2), Function.createDelegate(this, this.onQueryFailed));
+}
+
+function onQuerySucceeded2() {
+
+    var phoneNumber = "";
+    var emailAddress = "";
+    var department = "";
+    var sDateComplete = "";
+
+    var listEnumerator = listItems.getEnumerator();
+    while (listEnumerator.moveNext()) {
+        // alert("Item containing Nominator found! \nName: " + listEnumerator.get_current().get_item("Nominator_x0020_Name").get_lookupValue());
+        thisItem = listEnumerator.get_current();
+        
+        var approval = thisItem.get_item("Approval"); //boolean
+        incompleteSubmission = !approval;
+        
+        sSupportingDeputy="";
+        var oSupportingDeputy = thisItem.get_item("Supporting_x0020_Deputy_x0020_Mi");
+        if (oSupportingDeputy == null) {
+            incompleteSubmission = true;
+            } else {
+                    sSupportingDeputy = oSupportingDeputy.get_lookupValue();
+                    }
+
+        oTeamContact = thisItem.get_item("Team_x0020_Contact_x002f_Nominat");
+        sTeamContact = oTeamContact.get_lookupValue();
+
+        category = thisItem.get_item("Category");
+
+        submissionType = thisItem.get_item("Submission_x0020_Type");
+
+        odateComplete = new Date(0);
+        odateComplete = thisItem.get_item("Date_x0020_Completed");
+        if (submissionType == "Completed Work")
+            {
+                if (odateComplete === null) {
+                    console.log("submission is 'completed work' and date completed is empty");
+                    incompleteSubmission = true;
+                } else
+                {
+                    sDateComplete = odateComplete.toDateString();
+                    console.log("submission is 'completed work' and date completed is " + sDateComplete);
+                }
+            }
+
+        department = thisItem.get_item("Department_x0028_s_x0029_");
+        phoneNumber = thisItem.get_item("Phone_x0020_Number");
+        emailAddress = thisItem.get_item("Email_x0020_Address");
+        submission = thisItem.get_item("Submission");
+        teamName = thisItem.get_item("Team_x0020_Name");
+        sNominee = teamName; // used in the subject line and body of the email
+
+        arrTeamMembers = [];
+        OteamMembers = thisItem.get_item("Team_x0020_Members");
+        OteamMembers.forEach(function (user) {
+            arrTeamMembers.push(user.get_lookupValue());
+        });
+        if (arrTeamMembers.length == 0) {incompleteSubmission = true;}
+
+        oAlTeamContact = thisItem.get_item("Alternate_x0020_Team_x0020_Conta");
+        if (oAlTeamContact === null){} else {
+            /*oAlTeamContact.forEach(function (user) {
+                arrAltTeamContacts.push(user.get_lookupValue());
+            });
+            emailcc = arrAltTeamContacts;*/
+            emailcc = oAlTeamContact.get_email();
+        }
+
+        if ((category == "" || (department == "") || phoneNumber == "") || (emailAddress == "") || (submission == "") || (sSupportingDeputy == "") || (teamName == "")) {incompleteSubmission = true;}
+                           
+        foundListItem = true;
+        
+        if (redirectFlag) {
+            redirectFlag = !incompleteSubmission; // An incomplete submission flips the flag to false. Don't reset the flag if it is already set to false. 
+        }
+
+        if (foundListItem && !incompleteSubmission) {
+                success = true;
+                triggerEmail(stringName, itemId, success);           
+        } else {
+                // not found or incomplete!
+                success = false;
+                triggerEmail(stringName, itemId, success);
+   		}
+    }
+    if (redirectFlag) {
+        relocUrl = "/ppsa/SitePages/Submitted-Thankyou.aspx";
+        window.location.href = relocUrl;             
+        } else {
+        // not found or incomplete!
+        relocUrl = "/ppsa/SitePages/Submit-Oops_team.aspx";
+        window.location.href = relocUrl;	
+   }     
+}
+
+function onQueryFailed(sender, args) {
+            alert('Request failed. ' + args.get_message() + '\n' + args.get_stackTrace());
+}
+
+function triggerEmail(user,itemId, success) {
+    SP.SOD.executeFunc('sp.js', 'SP.ClientContext', processSendEmail(user, itemId, success));
+}
+
+function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
+
+function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter); }
+
+function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
+
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+function processSendEmail(user, itemId, success) {
+  var from = '';
+  var body = '';
+  var subject = '';
+  var to = [];
+  to.push(user);
+  to.push.apply(to, _toConsumableArray(emailcc));
+  to.push('richelle.mclean@gov.ab.ca');
+  to.push(emailbcc);
+	if (success){      
+	  from = 'psc.recognition@gov.ab.ca',
+	  body = 'PPSA - Team Award Nomination submission for ' + sNominee + ' has been submitted on ' + today(),
+	  subject = 'PPSA - Team Award Nomination for ' + sNominee;
+	} else {
+	  from = 'psc.recognition@gov.ab.ca',
+	  body = 'PPSA - Team Award Nomination submission for ' + sNominee + ' is Incomplete ' + today(),
+	  subject = 'PPSA - INCOMPLETE Team Award Nomination for ' + sNominee; // call sendEmail function
+	}
+
+  sendEmail(from, to, body, subject);
+  /*alert("\nThank you, your nomination has been submitted!\n");
+  window.location.href = "https://myaps.alberta.ca/Pages/My-Workplace/Recognizing-Your-Co-workers/Recognize-Individuals-or-Teams.aspx";
+  */
+
+  /*relocUrl = "/ppsa/SitePages/Submitted-Thankyou.aspx";
+  window.location.href = relocUrl;*/
+}
+
+function sendEmail(from, to, body, subject) {
+    try {
+        // get the relative url of the site
+        var siteurl = _spPageContextInfo.webAbsoluteUrl;
+        // alert("Site URL = " + siteurl);
+        var urlTemplate = siteurl + "/_api/SP.Utilities.Utility.SendEmail";
+        // alert("URL Template = " + urlTemplate);
+        $.ajax({
+            contentType: 'application/json',
+            url: urlTemplate,
+            type: "POST",
+            data: JSON.stringify({
+            'properties': {
+            '__metadata': {
+            'type': 'SP.Utilities.EmailProperties'
+                    },
+                    'From': from,
+                    'To': {'results': to },
+                    'Body': body,
+                    'Subject': subject
+                }
+            }),
+            headers: {
+            "Accept": "application/json;odata=verbose",
+                "content-type": "application/json;odata=verbose",
+                "X-RequestDigest": jQuery("#__REQUESTDIGEST").val()
+            },
+            success: function(data) {
+            // alert('Email sent successfully!');
+            console.log('Email sent successfully!');
+        },
+            error: function(err) {
+            alert('Error in sending email: ' + JSON.stringify(err));
+            }
+        });
+    }
+    catch (error) {
+        }
+}
+
+function today() {
+    var date = new Date();  
+    var options = {  
+        weekday: "long", year: "numeric", month: "short",  
+        day: "numeric", hour: "2-digit", minute: "2-digit"  
+    };  
+    
+    var sToday = date.toLocaleTimeString("en-ca", options);
+    console.log(date.toLocaleTimeString("en-ca", options));
+    return sToday;
+}

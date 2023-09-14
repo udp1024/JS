@@ -1,0 +1,25 @@
+<style type="text/css">
+.column {
+  float: left;
+  width: 50%;
+}
+
+/* Clear floats after the columns */
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.ms-webpart-titleText, .link-item {
+color: #0066cc;
+font-size: 24px;
+}
+
+.description {
+color: #444444;
+font-size: 16px;
+}
+
+</style>
+<script type="text/javascript" src="/Financial-Transformation/SiteAssets/js/SetCurrentFunnelHyperLinkJS.js"></script>
